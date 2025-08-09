@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ethiopia vs Egypt Chess</title>
+<style>
+  body {
+    background: #1c1c1c;
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 1rem;
+    user-select: none;
+  }
+  h1 {
+    margin-bottom: 0.5rem;
+  }
+  #side-select {
+    margin-bottom: 1rem;
+  }
+  #chessboard {
+    display: grid;
+    grid-template-columns: repeat(8, 64px);
+    grid-template-rows: repeat(8, 64px);
+    border: 4px solid #aa7a00;
+    box-shadow: 0 0 15px #aa7a00;
+  }
+  .square {
+    width: 64px;
+    height: 64px;
+    box-sizing: border-box;
+    position: relative;
+  }
+  .square.light {
+    background: #f0d9b5;
+  }
+  .square.dark {
+    background: #b58863;
+  }
+  .square.highlight {
+    outline: 3px solid #f9d71c;
+    z-index: 10;
+  }
+  .piece {
+    width: 100%;
+    height: 100%;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .piece:active {
+    transform: scale(1.1);
+  }
+  #status {
+    margin-top: 1rem;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<h1>Ethiopia vs Egypt Chess</h1>
+
+<label for="side-select">Choose your side: </label>
+<select id="side-select">
+  <option value="ethiopia" selected>Ethiopian Army</option>
+  <option value="egypt">Egyptian Army</option>
+</select>
+<button id="restart-btn">Start Game</button>
+
+<div id="chessboard"></div>
+
+<div id="status">White to move</div>
+
+<script>
+  // Board data (using Forsyth-Edwards Notation starting position for chess)
+  const startingFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+
+  // Piece codes: uppercase = White, lowercase = Black
+  // We'll map White to player's chosen side, Black to opponent
+  // Piece letter meanings: K - King, Q - Queen, R - Rook, B - Bishop, N - Knight, P - Pawn
+
+  // We'll create piece images based on side and piece type
+
+  const boardElem = document.getElementById("chessboard");
+  const sideSelect = document.getElementById("side-select");
+  const restartBtn = document.getElementById("restart-btn");
+  const statusElem = document.getElementById("status");
+
+  let board = [];
+  let selectedSquare = null;
+  let legalMoves = [];
+  let currentTurn = "w"; // 'w' for white, 'b' for black
+  let playerSide = "w"; // which color player controls (white or black)
+  let opponentSide = "b";
+
+  // Store piece images for Ethiopia and Egypt (placeholders with colored backgrounds + text)
+  // Ideally, replace these URLs with your premium sprites
+  const pieceSprites = {
+    ethiopia: {
+      K: "https://i.imgur.com/LhGz0ix.png", // Ethiopian King (placeholder)
+      Q: "https://i.imgur.com/r5o5mzD.png", // Queen
+      R: "https://i.imgur.com/ToDzNSp.png", // Rook
+      B: "https://i.imgur.com/6poB1X9.png", // Bishop
+      N: "https://i.imgur.com/cZ6lLbd.png", // Knight
+      P: "https://i.imgur.com/3RY8rYq.png", // Pawn
+    },
+    egypt: {
+      K: "https://i.imgur.com/9w8Iqht.png", // Egyptian King (placeholder)
+      Q: "https://i.imgur.com/gYcqE8a.png", // Queen
+      R: "https://i.imgur.com/czQ2ZcG.png", // Rook
+      B: "https://i.imgur.com/nxJCyQy.png", // Bishop
+      N: "https://i.imgur.com/8hXkkVv.png", // Knight
+      P: "https://i.imgur.com/i2kH4Qe.png", // Pawn
+    },
+  };
+
+  // Utility: Convert FEN to board array
+  function fenToBoard(fen) {
+    const rows = fen.split("/");
+    let boardArr = [];
+    for (const row of rows) {
+      for (const ch of row) {
+        if (isNaN(ch)) {
+          boardArr.push(ch);
+        } else {
+          for (let i = 0; i < +ch; i++) {
+            boardArr.push(null);
+          }
+        }
+      }
+    }
+    return boardArr;
+  }
+
+  // Render board squares and pieces
+  function renderBoard() {
+    boardElem.innerHTML = "";
+    for (let i = 0; i < 64; i++) {
+      const square = document.createElement("div");
+      square.classList.add("square");
+
+      const row = Math.floor(i / 8);
+      const col = i % 8;
+
+      // Color squares in checkerboard pattern
+      if ((row + col) % 2 === 0) square.classList.add("light");
+      else square.classList.add("dark");
+
+      square.dataset.index = i;
+
+      // Highlight legal moves
+      if (legalMoves.includes(i)) square.classList.add("highlight");
+
+      // Highlight selected square
+      if (selectedSquare === i) square.classList.add("highlight");
+
+      const piece = board[i];
+      if (piece) {
+        const pieceDiv = document.createElement("div");
+        pieceDiv.classList.add("piece");
+
+        const color = piece === piece.toUpperCase() ? "w" : "b";
+        const pieceType = piece.toUpperCase();
+
+        // Determine which sprite to use based on side
+        let spriteSide;
+        if (color === playerSide) {
+          spriteSide = sideSelect.value;
+        } else {
+          spriteSide = sideSelect.value === "ethiopia" ? "egypt" : "ethiopia";
+        }
+
+        pieceDiv.style.backgroundImage = `url(${pieceSprites[spriteSide][pieceType]})`;
+        pieceDiv.dataset.index = i;
+
+        // Attach click event to pieces if player's turn and player's piece
+        if (currentTurn === color && color === playerSide) {
+          pieceDiv.addEventListener("click", () => selectSquare(i));
+        }
+
+        square.appendChild(pieceDiv);
+      } else {
+        // Empty square click handler
+        square.addEventListener("click", () => selectSquare(i));
+      }
+
+      boardElem.appendChild(square);
+    }
+    updateStatus();
+  }
+
+  // Simplified legal moves (pawn move only to keep example short)
+  // This function should be expanded for full chess legality
+  function generateLegalMoves(fromIndex) {
+    const piece = board[fromIndex];
+    if (!piece) return [];
+
+    const color = piece === piece.toUpperCase() ? "w" : "b";
+    const dir = color === "w" ? -8 : 8; // direction pawns move
+    let moves = [];
+
+    if (piece.toUpperCase() === "P") {
+      const forward = fromIndex + dir;
+      if (forward >= 0 && forward < 64 && !board[forward]) moves.push(forward);
+      // Add captures
+      const leftCapture = fromIndex + dir - 1;
+      const rightCapture = fromIndex + dir + 1;
+      if (leftCapture >= 0 && leftCapture < 64 && board[leftCapture] && isEnemy(board[leftCapture], color))
+        moves.push(leftCapture);
+      if (rightCapture >= 0 && rightCapture < 64 && board[rightCapture] && isEnemy(board[rightCapture], color))
+        moves.push(rightCapture);
+    } else {
+      // For other pieces, allow all moves for demo purposes (you can expand chess logic later)
+      for (let i = 0; i < 64; i++) {
+        if (i !== fromIndex && (!board[i] || isEnemy(board[i], color))) {
+          moves.push(i);
+        }
+      }
+    }
+    return moves;
+  }
+
+  function isEnemy(piece, color) {
+    if (!piece) return false;
+    return (piece === piece.toUpperCase()) !== (color === "w");
+  }
+
+  function selectSquare(index) {
+    if (selectedSquare === null) {
+      // Select if piece of current player
+      if (board[index] && ((board[index] === board[index].toUpperCase() && currentTurn === "w") || (board[index] === board[index].toLowerCase() && currentTurn === "b"))) {
+        selectedSquare = index;
+        legalMoves = generateLegalMoves(index);
+      }
+    } else {
+      // If clicked on a legal move, move the piece
+      if (legalMoves.includes(index)) {
+        movePiece(selectedSquare, index);
+        selectedSquare = null;
+        legalMoves = [];
+        currentTurn = currentTurn === "w" ? "b" : "w";
+      } else if (board[index] && ((board[index] === board[index].toUpperCase() && currentTurn === "w") || (board[index] === board[index].toLowerCase() && currentTurn === "b"))) {
+        // Select another piece of the same player
+        selectedSquare = index;
+        legalMoves = generateLegalMoves(index);
+      } else {
+        // Deselect if clicked elsewhere
+        selectedSquare = null;
+        legalMoves = [];
+      }
+    }
+    renderBoard();
+  }
+
+  function movePiece(from, to) {
+    board[to] = board[from];
+    board[from] = null;
+  }
+
+  function updateStatus() {
+    const turnStr = currentTurn === playerSide ? "Your turn" : "Opponent's turn";
+    statusElem.textContent = `${turnStr} (${currentTurn === "w" ? "White" : "Black"})`;
+  }
+
+  function startGame() {
+    board = fenToBoard(startingFEN);
+    selectedSquare = null;
+    legalMoves = [];
+    currentTurn = "w";
+
+    // Set player color based on choice
+    if (sideSelect.value === "ethiopia") {
+      playerSide = "w";
+      opponentSide = "b";
+    } else {
+      playerSide = "b";
+      opponentSide = "w";
+    }
+
+    renderBoard();
+  }
+
+  restartBtn.addEventListener("click", startGame);
+
+  // Initialize on load
+  startGame();
+
+</script>
+
+</body>
+</html>
